@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	model "github.com/Zhukek/loyalty/internal/model"
+	model "github.com/Zhukek/loyalty/internal/models"
 )
 
 type Repository interface {

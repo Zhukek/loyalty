@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	models "github.com/Zhukek/loyalty/internal/model"
+	models "github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository/postgresql/pgerr"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"

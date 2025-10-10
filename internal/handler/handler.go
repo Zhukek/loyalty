@@ -10,7 +10,7 @@ import (
 
 	"github.com/Zhukek/loyalty/internal/errs"
 	"github.com/Zhukek/loyalty/internal/logger"
-	models "github.com/Zhukek/loyalty/internal/model"
+	"github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository"
 	"github.com/Zhukek/loyalty/internal/utils"
 	"github.com/go-chi/chi/v5"
