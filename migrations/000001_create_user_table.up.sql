@@ -1,3 +1,8 @@
-DROP INDEX IF EXISTS idx_username;
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-DROP TABLE IF EXISTS users;
+CREATE INDEX idx_username on users(username);

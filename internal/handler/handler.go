@@ -2,11 +2,17 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"time"
 
+	"github.com/Zhukek/loyalty/internal/errs"
 	"github.com/Zhukek/loyalty/internal/logger"
+	models "github.com/Zhukek/loyalty/internal/model"
 	"github.com/Zhukek/loyalty/internal/repository"
+	"github.com/Zhukek/loyalty/internal/utils"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -24,6 +30,63 @@ func ping(w http.ResponseWriter, logger logger.Logger, rep repository.Repository
 	w.WriteHeader(http.StatusOK)
 }
 
+func create(res http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	res.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	user := models.User{}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		logger.LogErr(
+			"target", "read body",
+			"error", err,
+		)
+
+		res.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err = json.Unmarshal(body, &user); err != nil {
+		logger.LogErr(
+			"target", "json unmarshal",
+			"error", err,
+		)
+
+		res.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	user.Pass, err = utils.HashPass(user.Pass)
+
+	if err != nil {
+		logger.LogErr(
+			"target", "hash pass",
+			"error", err,
+		)
+
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	createdUser, err := rep.CreateUser(user.Log, user.Pass, context.Background())
+
+	if errors.Is(err, errs.ErrUsernameTaken) {
+		res.WriteHeader(http.StatusConflict)
+		return
+	} else if err != nil {
+		logger.LogErr(
+			"target", "create user",
+			"error", err,
+		)
+
+		res.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	//Добавить установку JWT
+
+	res.WriteHeader(http.StatusOK)
+}
+
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {
 	router := chi.NewRouter()
 
@@ -34,7 +97,7 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 
 	router.Route("/api/user", func(r chi.Router) {
 		r.Post("/register", func(w http.ResponseWriter, r *http.Request) {
-
+			create(w, r, logger, repository)
 		})
 		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 
