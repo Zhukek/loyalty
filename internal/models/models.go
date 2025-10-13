@@ -1,7 +1,11 @@
 package models
 
 type User struct {
-	Id   int
-	Log  string `json:"login"`
+	UserPublic
 	Pass string `json:"password"`
+}
+
+type UserPublic struct {
+	Id  int    `json:"id"`
+	Log string `json:"login"`
 }

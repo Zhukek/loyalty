@@ -1,7 +1,7 @@
 package logger
 
 type Logger interface {
-	LogErr(args ...any)
-	LogInfo(args ...any)
+	LogErr(target string, err error)
+	LogInfo(target string, err error)
 	Sync()
 }

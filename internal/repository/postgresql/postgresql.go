@@ -27,7 +27,7 @@ type PgRepository struct {
 	pool *pgxpool.Pool
 }
 
-func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx context.Context) (*models.User, error) {
+func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx context.Context) (*models.UserPublic, error) {
 	err := createUser(login, hashed_pass, rep.pool, ctx)
 
 	if err != nil {
@@ -40,7 +40,14 @@ func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx contex
 		return nil, pgerr.ClassifyErr(err)
 	}
 
-	return user, nil
+	return &models.UserPublic{
+		Id:  user.Id,
+		Log: user.Log,
+	}, nil
+}
+
+func (rep *PgRepository) GetUserByName(login string, ctx context.Context) (*models.User, error) {
+	return getUserByName(login, rep.pool, ctx)
 }
 
 func (rep *PgRepository) Close() {
@@ -106,9 +113,9 @@ func migration(DBURI string) error {
 func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*models.User, error) {
 	user := models.User{}
 	err := DBCon.QueryRow(ctx,
-		`SELECT id, username FROM users WHERE username = @username`,
+		`SELECT id, username, password_hash FROM users WHERE username = @username`,
 		pgx.NamedArgs{"username": username},
-	).Scan(&user.Id, &user.Log)
+	).Scan(&user.Id, &user.Log, &user.Pass)
 
 	return &user, err
 }
@@ -116,9 +123,9 @@ func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*m
 func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User, error) {
 	user := models.User{}
 	err := DBCon.QueryRow(ctx,
-		`SELECT id, username FROM users WHERE id = @id`,
+		`SELECT id, username, password_hash FROM users WHERE id = @id`,
 		pgx.NamedArgs{"id": id},
-	).Scan(&user.Id, &user.Log)
+	).Scan(&user.Id, &user.Log, &user.Pass)
 
 	return &user, err
 }

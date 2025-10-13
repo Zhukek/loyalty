@@ -1,6 +1,16 @@
 package utils
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"net/http"
+	"time"
+
+	"github.com/Zhukek/loyalty/internal/errs"
+	"github.com/Zhukek/loyalty/internal/models"
+	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
+)
+
+/// Хеширование пароля и сравнение с кешем
 
 func HashPass(pass string) (string, error) {
 	hashedPass, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
@@ -13,4 +23,67 @@ func HashPass(pass string) (string, error) {
 
 func CheckPass(hash string, pass string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass))
+}
+
+/// Создание JWT и вытягивание из него информации о юзере
+
+type claims struct {
+	jwt.RegisteredClaims
+	UserID   int
+	Username string
+}
+
+const (
+	TOKEN_EXP  = time.Hour
+	SECRET_STR = "asdfygausdf"
+)
+
+func GenerateJWT(user *models.UserPublic) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
+		UserID:   user.Id,
+		Username: user.Log,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TOKEN_EXP)),
+		},
+	})
+
+	return token.SignedString([]byte(SECRET_STR))
+}
+
+func GetTokenData(tokenStr string) (*models.UserPublic, error) {
+	claims := &claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errs.ErrSigningMethod
+		}
+		return []byte(SECRET_STR), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !token.Valid {
+		return nil, errs.ErrNotValidToken
+	}
+
+	user := models.UserPublic{
+		Id:  claims.UserID,
+		Log: claims.Username,
+	}
+
+	return &user, nil
+}
+
+/// Работа с Cookie
+
+func GenerateJWTCookie(jwtString string) *http.Cookie {
+	return &http.Cookie{
+		Name:     "jwt",
+		Value:    jwtString,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		MaxAge:   60 * 60,
+	}
 }

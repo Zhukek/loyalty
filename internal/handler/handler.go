@@ -10,6 +10,7 @@ import (
 
 	"github.com/Zhukek/loyalty/internal/errs"
 	"github.com/Zhukek/loyalty/internal/logger"
+	"github.com/Zhukek/loyalty/internal/middlewares/authmiddleware"
 	"github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository"
 	"github.com/Zhukek/loyalty/internal/utils"
@@ -23,68 +24,120 @@ func ping(w http.ResponseWriter, logger logger.Logger, rep repository.Repository
 
 	err := rep.Ping(ctx)
 	if err != nil {
-		logger.LogErr(err)
+		logger.LogErr("ping database", err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-func create(res http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
-	res.Header().Set("Content-Type", "text/plain; charset=utf-8")
+func create(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	user := models.User{}
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		logger.LogErr(
-			"target", "read body",
-			"error", err,
-		)
+		logger.LogErr("read body", err)
 
-		res.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(body, &user); err != nil {
-		logger.LogErr(
-			"target", "json unmarshal",
-			"error", err,
-		)
+		logger.LogErr("json unmarshal", err)
 
-		res.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	user.Pass, err = utils.HashPass(user.Pass)
 
 	if err != nil {
-		logger.LogErr(
-			"target", "hash pass",
-			"error", err,
-		)
+		logger.LogErr("hash pass", err)
 
-		res.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	createdUser, err := rep.CreateUser(user.Log, user.Pass, context.Background())
 
 	if errors.Is(err, errs.ErrUsernameTaken) {
-		res.WriteHeader(http.StatusConflict)
+		w.WriteHeader(http.StatusConflict)
 		return
 	} else if err != nil {
-		logger.LogErr(
-			"target", "create user",
-			"error", err,
-		)
+		logger.LogErr("create user", err)
 
-		res.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	//Добавить установку JWT
+	jwt, err := utils.GenerateJWT(createdUser)
 
-	res.WriteHeader(http.StatusOK)
+	if err != nil {
+		logger.LogErr("generate jwt", err)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	cookie := utils.GenerateJWTCookie(jwt)
+
+	http.SetCookie(w, cookie)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func auth(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	user := models.User{}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		logger.LogErr("read body", err)
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err = json.Unmarshal(body, &user); err != nil {
+		logger.LogErr("json unmarshal", err)
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	foundUser, err := rep.GetUserByName(user.Log, context.Background())
+	if err != nil {
+		logger.LogInfo("get user", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	if err := utils.CheckPass(foundUser.Pass, user.Pass); err != nil {
+		logger.LogInfo("check pass", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	jwt, err := utils.GenerateJWT(&foundUser.UserPublic)
+	if err != nil {
+		logger.LogErr("generate jwt", err)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	cookie := utils.GenerateJWTCookie(jwt)
+	http.SetCookie(w, cookie)
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {
@@ -100,23 +153,28 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 			create(w, r, logger, repository)
 		})
 		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
-
+			auth(w, r, logger, repository)
 		})
-		r.Post("/orders", func(w http.ResponseWriter, r *http.Request) {
 
-		})
-		r.Get("/orders", func(w http.ResponseWriter, r *http.Request) {
+		r.Group(func(r chi.Router) {
+			r.Use(authmiddleware.AuthMiddleware)
 
-		})
-		r.Get("/withdrawals", func(w http.ResponseWriter, r *http.Request) {
-
-		})
-		r.Route("/balance", func(r chi.Router) {
-			r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			r.Post("/orders", func(w http.ResponseWriter, r *http.Request) {
+				newOrder(w, r, logger, repository)
+			})
+			r.Get("/orders", func(w http.ResponseWriter, r *http.Request) {
 
 			})
-			r.Post("/withdraw", func(w http.ResponseWriter, r *http.Request) {
+			r.Get("/withdrawals", func(w http.ResponseWriter, r *http.Request) {
 
+			})
+			r.Route("/balance", func(r chi.Router) {
+				r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+
+				})
+				r.Post("/withdraw", func(w http.ResponseWriter, r *http.Request) {
+
+				})
 			})
 		})
 	})

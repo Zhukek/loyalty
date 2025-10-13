@@ -6,12 +6,18 @@ type Slogger struct {
 	slogger *zap.SugaredLogger
 }
 
-func (s *Slogger) LogErr(args ...any) {
-	s.slogger.Errorln(args)
+func (s *Slogger) LogErr(target string, err error) {
+	s.slogger.Errorln(
+		"target", target,
+		"error", err,
+	)
 }
 
-func (s *Slogger) LogInfo(args ...any) {
-	s.slogger.Infoln(args...)
+func (s *Slogger) LogInfo(target string, err error) {
+	s.slogger.Infoln(
+		"target", target,
+		"error", err,
+	)
 }
 
 func (s *Slogger) Sync() {
