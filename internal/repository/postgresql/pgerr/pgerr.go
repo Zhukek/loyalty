@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func ClassifyErr(err error) error {
+func ClassifyUserErr(err error) error {
 	var pgErr *pgconn.PgError
 
 	if errors.As(err, &pgErr) {

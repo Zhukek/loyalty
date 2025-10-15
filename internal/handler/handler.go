@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Zhukek/loyalty/internal/errs"
@@ -31,21 +32,21 @@ func ping(w http.ResponseWriter, logger logger.Logger, rep repository.Repository
 	w.WriteHeader(http.StatusOK)
 }
 
-func create(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+func register(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
 	user := models.User{}
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		logger.LogErr("read body", err)
+		logger.LogInfo("read body", err)
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(body, &user); err != nil {
-		logger.LogErr("json unmarshal", err)
+		logger.LogInfo("json unmarshal", err)
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -94,14 +95,14 @@ func auth(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep re
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		logger.LogErr("read body", err)
+		logger.LogInfo("read body", err)
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	if err = json.Unmarshal(body, &user); err != nil {
-		logger.LogErr("json unmarshal", err)
+		logger.LogInfo("json unmarshal", err)
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -137,6 +138,26 @@ func auth(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep re
 func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		logger.LogInfo("read body", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	num, err := strconv.Atoi(string(body))
+	if err != nil {
+		logger.LogInfo("convert order num", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	order, err := rep.GetOrderByNum(num, context.Background())
+	if err != nil {
+		/// логика, если не нашли никаких order
+		/// также добавить обработку datetime при возвращении из бд
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -150,7 +171,7 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 
 	router.Route("/api/user", func(r chi.Router) {
 		r.Post("/register", func(w http.ResponseWriter, r *http.Request) {
-			create(w, r, logger, repository)
+			register(w, r, logger, repository)
 		})
 		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
 			auth(w, r, logger, repository)

@@ -31,13 +31,13 @@ func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx contex
 	err := createUser(login, hashed_pass, rep.pool, ctx)
 
 	if err != nil {
-		return nil, pgerr.ClassifyErr(err)
+		return nil, pgerr.ClassifyUserErr(err)
 	}
 
 	user, err := getUserByName(login, rep.pool, ctx)
 
 	if err != nil {
-		return nil, pgerr.ClassifyErr(err)
+		return nil, err
 	}
 
 	return &models.UserPublic{
@@ -48,6 +48,14 @@ func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx contex
 
 func (rep *PgRepository) GetUserByName(login string, ctx context.Context) (*models.User, error) {
 	return getUserByName(login, rep.pool, ctx)
+}
+
+func (rep *PgRepository) CreateOrder(number int, userId int, status models.OrderStatus, ctx context.Context) error {
+	return createOrder(number, userId, status, rep.pool, ctx)
+}
+
+func (rep *PgRepository) GetOrderByNum(number int, ctx context.Context) (*models.Order, error) {
+	return getOrderByNumber(number, rep.pool, ctx)
 }
 
 func (rep *PgRepository) Close() {
@@ -136,6 +144,29 @@ func createUser(login string, hashed_pass string, DBCon DBConnection, ctx contex
 		pgx.NamedArgs{
 			"login":       login,
 			"hashed_pass": hashed_pass,
+		},
+	)
+
+	return err
+}
+
+func getOrderByNumber(number int, DBCon DBConnection, ctx context.Context) (*models.Order, error) {
+	order := models.Order{}
+	err := DBCon.QueryRow(ctx,
+		`SELECT number, status, accrual, uploaded_at, user_id FROM orders WHERE number = @number`,
+		pgx.NamedArgs{"number": number},
+	).Scan(&order.Number, &order.Status, &order.Accrual, &order.Uploaded, &order.UserID)
+
+	return &order, err
+}
+
+func createOrder(number int, userId int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
+	_, err := DBCon.Exec(ctx,
+		`INSERT INTO orders (number, status, user_id) VALUES (@number, @status, @user_id)`,
+		pgx.NamedArgs{
+			"number":  number,
+			"status":  status,
+			"user_id": userId,
 		},
 	)
 
