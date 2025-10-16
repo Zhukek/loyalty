@@ -11,6 +11,7 @@ import (
 
 	"github.com/Zhukek/loyalty/internal/errs"
 	"github.com/Zhukek/loyalty/internal/logger"
+	"github.com/Zhukek/loyalty/internal/middlewares"
 	"github.com/Zhukek/loyalty/internal/middlewares/authmiddleware"
 	"github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository"
@@ -148,17 +149,47 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 	num, err := strconv.Atoi(string(body))
 	if err != nil {
 		logger.LogInfo("convert order num", err)
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	userValue := req.Context().Value(middlewares.UserKey)
+
+	if userValue == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	user, ok := userValue.(*models.UserPublic)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	order, err := rep.GetOrderByNum(num, context.Background())
 	if err != nil {
-		/// логика, если не нашли никаких order
-		/// также добавить обработку datetime при возвращении из бд
+		if errors.Is(err, errs.ErrNoOrderFound) {
+			if err := rep.CreateOrder(num, user.Id, models.OrderNew, context.Background()); err != nil {
+				logger.LogErr("create order", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusAccepted)
+			return
+		} else {
+			logger.LogErr("get order", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if order.UserID == user.Id {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	w.WriteHeader(http.StatusConflict)
 }
 
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {

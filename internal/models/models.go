@@ -24,7 +24,7 @@ const (
 type Order struct {
 	Number   int
 	Status   OrderStatus
-	Accrual  int
+	Accrual  int `json:"omitempty"`
 	Uploaded time.Time
 	UserID   int
 }

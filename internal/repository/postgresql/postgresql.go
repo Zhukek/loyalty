@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Zhukek/loyalty/internal/errs"
 	models "github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository/postgresql/pgerr"
 	"github.com/golang-migrate/migrate/v4"
@@ -55,7 +56,16 @@ func (rep *PgRepository) CreateOrder(number int, userId int, status models.Order
 }
 
 func (rep *PgRepository) GetOrderByNum(number int, ctx context.Context) (*models.Order, error) {
-	return getOrderByNumber(number, rep.pool, ctx)
+	order, err := getOrderByNumber(number, rep.pool, ctx)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, errs.ErrNoOrderFound
+		}
+		return nil, err
+	}
+
+	return order, nil
 }
 
 func (rep *PgRepository) Close() {
@@ -152,10 +162,16 @@ func createUser(login string, hashed_pass string, DBCon DBConnection, ctx contex
 
 func getOrderByNumber(number int, DBCon DBConnection, ctx context.Context) (*models.Order, error) {
 	order := models.Order{}
+	var accrual sql.NullInt32
+
 	err := DBCon.QueryRow(ctx,
 		`SELECT number, status, accrual, uploaded_at, user_id FROM orders WHERE number = @number`,
 		pgx.NamedArgs{"number": number},
-	).Scan(&order.Number, &order.Status, &order.Accrual, &order.Uploaded, &order.UserID)
+	).Scan(&order.Number, &order.Status, &accrual, &order.Uploaded, &order.UserID)
+
+	if accrual.Valid {
+		order.Accrual = int(accrual.Int32)
+	}
 
 	return &order, err
 }
