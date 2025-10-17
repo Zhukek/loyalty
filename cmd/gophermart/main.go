@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/Zhukek/loyalty/internal/client"
 	"github.com/Zhukek/loyalty/internal/handler"
 	"github.com/Zhukek/loyalty/internal/logger"
 	"github.com/Zhukek/loyalty/internal/logger/slogger"
@@ -32,7 +33,7 @@ func run(logger logger.Logger) error {
 	var (
 		address string = config.Address
 		DBURI          = config.DBURI
-		// accrual        = config.AccrualAddress
+		accrual        = config.AccrualAddress
 	)
 
 	if DBURI == "" {
@@ -46,6 +47,9 @@ func run(logger logger.Logger) error {
 	}
 
 	defer rep.Close()
+
+	client := client.NewtClient(accrual, rep)
+	defer client.Close()
 
 	router := handler.NewRouter(logger, rep)
 
