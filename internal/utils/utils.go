@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Zhukek/loyalty/internal/errs"
+	"github.com/Zhukek/loyalty/internal/middlewares"
 	"github.com/Zhukek/loyalty/internal/models"
 	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/crypto/bcrypt"
@@ -86,4 +87,18 @@ func GenerateJWTCookie(jwtString string) *http.Cookie {
 		Secure:   true,
 		MaxAge:   60 * 60,
 	}
+}
+
+/// Проверить и вытащить user в handler
+
+func GetUserFromReq(w http.ResponseWriter, req *http.Request) (*models.UserPublic, bool) {
+	userValue := req.Context().Value(middlewares.UserKey)
+
+	if userValue == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil, false
+	}
+
+	user, ok := userValue.(*models.UserPublic)
+	return user, ok
 }

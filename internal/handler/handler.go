@@ -11,7 +11,6 @@ import (
 
 	"github.com/Zhukek/loyalty/internal/errs"
 	"github.com/Zhukek/loyalty/internal/logger"
-	"github.com/Zhukek/loyalty/internal/middlewares"
 	"github.com/Zhukek/loyalty/internal/middlewares/authmiddleware"
 	"github.com/Zhukek/loyalty/internal/models"
 	"github.com/Zhukek/loyalty/internal/repository"
@@ -139,6 +138,13 @@ func auth(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep re
 func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 
+	user, ok := utils.GetUserFromReq(w, req)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		logger.LogInfo("read body", err)
@@ -150,20 +156,6 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 	if err != nil {
 		logger.LogInfo("convert order num", err)
 		w.WriteHeader(http.StatusUnprocessableEntity)
-		return
-	}
-
-	userValue := req.Context().Value(middlewares.UserKey)
-
-	if userValue == nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	user, ok := userValue.(*models.UserPublic)
-
-	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -192,6 +184,43 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 	w.WriteHeader(http.StatusConflict)
 }
 
+func getOrders(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "application/json")
+
+	user, ok := utils.GetUserFromReq(w, req)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	orders, err := rep.GetUserOrders(user.Id, context.Background())
+	if err != nil {
+		logger.LogErr("get orders", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(orders) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	data, err := json.Marshal(orders)
+	if err != nil {
+		logger.LogErr("marshal orders", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		logger.LogErr("write data", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {
 	router := chi.NewRouter()
 
@@ -215,7 +244,7 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 				newOrder(w, r, logger, repository)
 			})
 			r.Get("/orders", func(w http.ResponseWriter, r *http.Request) {
-
+				getOrders(w, r, logger, repository)
 			})
 			r.Get("/withdrawals", func(w http.ResponseWriter, r *http.Request) {
 

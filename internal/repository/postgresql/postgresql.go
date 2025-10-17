@@ -51,8 +51,8 @@ func (rep *PgRepository) GetUserByName(login string, ctx context.Context) (*mode
 	return getUserByName(login, rep.pool, ctx)
 }
 
-func (rep *PgRepository) CreateOrder(number int, userId int, status models.OrderStatus, ctx context.Context) error {
-	return createOrder(number, userId, status, rep.pool, ctx)
+func (rep *PgRepository) CreateOrder(number int, userID int, status models.OrderStatus, ctx context.Context) error {
+	return createOrder(number, userID, status, rep.pool, ctx)
 }
 
 func (rep *PgRepository) GetOrderByNum(number int, ctx context.Context) (*models.Order, error) {
@@ -66,6 +66,10 @@ func (rep *PgRepository) GetOrderByNum(number int, ctx context.Context) (*models
 	}
 
 	return order, nil
+}
+
+func (rep *PgRepository) GetUserOrders(userID int, ctx context.Context) ([]models.Order, error) {
+	return getUserOrders(userID, rep.pool, ctx)
 }
 
 func (rep *PgRepository) Close() {
@@ -176,13 +180,50 @@ func getOrderByNumber(number int, DBCon DBConnection, ctx context.Context) (*mod
 	return &order, err
 }
 
-func createOrder(number int, userId int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
+func getUserOrders(userID int, DBCon DBConnection, ctx context.Context) ([]models.Order, error) {
+	var orders []models.Order
+
+	rows, err := DBCon.Query(ctx,
+		`SELECT number, status, accrual, uploaded_at FROM orders WHERE user_id = @userID`,
+		pgx.NamedArgs{"userID": userID},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		order := models.Order{}
+		var accrual sql.NullInt32
+
+		err = rows.Scan(&order.Number, &order.Status, &accrual, &order.Uploaded)
+		if err != nil {
+			return nil, err
+		}
+
+		if accrual.Valid {
+			order.Accrual = int(accrual.Int32)
+		}
+
+		orders = append(orders, order)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+func createOrder(number int, userID int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
 		`INSERT INTO orders (number, status, user_id) VALUES (@number, @status, @user_id)`,
 		pgx.NamedArgs{
 			"number":  number,
 			"status":  status,
-			"user_id": userId,
+			"user_id": userID,
 		},
 	)
 

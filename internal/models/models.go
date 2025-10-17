@@ -22,9 +22,9 @@ const (
 )
 
 type Order struct {
-	Number   int
-	Status   OrderStatus
-	Accrual  int `json:"omitempty"`
-	Uploaded time.Time
-	UserID   int
+	Number   int         `json:"number"`
+	Status   OrderStatus `json:"status"`
+	Accrual  int         `json:"accrual,omitempty"`
+	Uploaded time.Time   `json:"uploaded_at"`
+	UserID   int         `json:"-"`
 }
