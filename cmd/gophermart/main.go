@@ -48,7 +48,7 @@ func run(logger logger.Logger) error {
 
 	defer rep.Close()
 
-	client := client.NewtClient(accrual, rep)
+	client := client.NewtClient(accrual, rep, logger)
 	defer client.Close()
 
 	router := handler.NewRouter(logger, rep)

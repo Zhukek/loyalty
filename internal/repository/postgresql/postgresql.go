@@ -72,6 +72,10 @@ func (rep *PgRepository) GetUserOrders(userID int, ctx context.Context) ([]model
 	return getUserOrders(userID, rep.pool, ctx)
 }
 
+func (rep *PgRepository) GetProcessingOrders(ctx context.Context) ([]models.Order, error) {
+	return getProcessingOrders(rep.pool, ctx)
+}
+
 func (rep *PgRepository) Close() {
 	rep.pool.Close()
 }
@@ -142,7 +146,7 @@ func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*m
 	return &user, err
 }
 
-func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User, error) {
+/* func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User, error) {
 	user := models.User{}
 	err := DBCon.QueryRow(ctx,
 		`SELECT id, username, password_hash FROM users WHERE id = @id`,
@@ -150,7 +154,7 @@ func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User,
 	).Scan(&user.Id, &user.Log, &user.Pass)
 
 	return &user, err
-}
+} */
 
 func createUser(login string, hashed_pass string, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
@@ -204,6 +208,37 @@ func getUserOrders(userID int, DBCon DBConnection, ctx context.Context) ([]model
 
 		if accrual.Valid {
 			order.Accrual = int(accrual.Int32)
+		}
+
+		orders = append(orders, order)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return orders, nil
+}
+
+func getProcessingOrders(DBCon DBConnection, ctx context.Context) ([]models.Order, error) {
+	var orders []models.Order
+
+	rows, err := DBCon.Query(ctx,
+		`SELECT number, status FROM orders WHERE status = 'NEW' OR status = 'PROCESSING'`,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		order := models.Order{}
+		err = rows.Scan(&order.Number, &order.Status)
+		if err != nil {
+			return nil, err
 		}
 
 		orders = append(orders, order)
