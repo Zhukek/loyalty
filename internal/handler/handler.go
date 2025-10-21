@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/Zhukek/loyalty/internal/errs"
@@ -152,12 +151,7 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 		return
 	}
 
-	num, err := strconv.Atoi(string(body))
-	if err != nil {
-		logger.LogInfo("convert order num", err)
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		return
-	}
+	num := string(body)
 
 	order, err := rep.GetOrderByNum(num, context.Background())
 	if err != nil {

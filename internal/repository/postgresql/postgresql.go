@@ -51,11 +51,11 @@ func (rep *PgRepository) GetUserByName(login string, ctx context.Context) (*mode
 	return getUserByName(login, rep.pool, ctx)
 }
 
-func (rep *PgRepository) CreateOrder(number int, userID int, status models.OrderStatus, ctx context.Context) error {
+func (rep *PgRepository) CreateOrder(number string, userID int, status models.OrderStatus, ctx context.Context) error {
 	return createOrder(number, userID, status, rep.pool, ctx)
 }
 
-func (rep *PgRepository) GetOrderByNum(number int, ctx context.Context) (*models.Order, error) {
+func (rep *PgRepository) GetOrderByNum(number string, ctx context.Context) (*models.Order, error) {
 	order, err := getOrderByNumber(number, rep.pool, ctx)
 
 	if err != nil {
@@ -168,7 +168,7 @@ func createUser(login string, hashed_pass string, DBCon DBConnection, ctx contex
 	return err
 }
 
-func getOrderByNumber(number int, DBCon DBConnection, ctx context.Context) (*models.Order, error) {
+func getOrderByNumber(number string, DBCon DBConnection, ctx context.Context) (*models.Order, error) {
 	order := models.Order{}
 	var accrual sql.NullInt32
 
@@ -252,7 +252,7 @@ func getProcessingOrders(DBCon DBConnection, ctx context.Context) ([]models.Orde
 	return orders, nil
 }
 
-func createOrder(number int, userID int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
+func createOrder(number string, userID int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
 		`INSERT INTO orders (number, status, user_id) VALUES (@number, @status, @user_id)`,
 		pgx.NamedArgs{

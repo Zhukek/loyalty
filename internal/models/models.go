@@ -16,15 +16,22 @@ type OrderStatus string
 
 const (
 	OrderNew        OrderStatus = "NEW"
+	OrderRegistered OrderStatus = "REGISTERED"
 	OrderProcessing OrderStatus = "PROCESSING"
 	OrderInvalid    OrderStatus = "INVALID"
 	OrderProcessed  OrderStatus = "PROCESSED"
 )
 
 type Order struct {
-	Number   int         `json:"number"`
+	Number   string      `json:"number"`
 	Status   OrderStatus `json:"status"`
 	Accrual  int         `json:"accrual,omitempty"`
 	Uploaded time.Time   `json:"uploaded_at"`
 	UserID   int         `json:"-"`
+}
+
+type AccrualOrder struct {
+	Order   string      `json:"order"`
+	Status  OrderStatus `json:"status"`
+	Accrual int         `json:"accrual"`
 }

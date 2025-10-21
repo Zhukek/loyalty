@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/Zhukek/loyalty/internal/logger"
@@ -33,28 +34,47 @@ func (c *Client) addJobs() {
 
 func (c *Client) worker() {
 	for order := range c.jobs {
-		fmt.Println(order)
+		var resOrder models.AccrualOrder
+
+		resp, err := c.c.R().
+			SetPathParam("orderID", order.Number).
+			SetHeader("Accept", "application/json").
+			SetResult(&resOrder).
+			Get(c.accrual + "/api/orders/{orderID}")
+
+		if err != nil {
+			c.logger.LogErr("get accrual", err)
+			continue
+		}
+
+		switch resp.StatusCode() {
+		case http.StatusOK:
+			fmt.Println(resOrder.Order)
+			/// update
+		case http.StatusNoContent:
+			/// invalid
+			continue
+		case http.StatusTooManyRequests:
+			time.Sleep(1 * time.Minute)
+
+		}
 	}
 }
 
 func (c *Client) start() {
 	numWorkers := 3
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(5 * time.Second)
 
 	for i := 1; i <= numWorkers; i++ {
 		go c.worker()
 	}
 
-	go func() {
-		for {
-			<-ticker.C
-			if len(c.jobs) == 0 {
-				c.addJobs()
-			}
+	for {
+		<-ticker.C
+		if len(c.jobs) == 0 {
+			c.addJobs()
 		}
-	}()
-
-	select {}
+	}
 }
 
 func (c *Client) Close() {
@@ -75,7 +95,7 @@ func NewtClient(accrualAddress string, rep repository.Repository, logger logger.
 		jobs:    jobsChan,
 	}
 
-	client.start()
+	go client.start()
 
 	return &client
 }
