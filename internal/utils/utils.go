@@ -86,7 +86,7 @@ func GenerateJWTCookie(jwtString string) *http.Cookie {
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
-		MaxAge:   60 * 60,
+		MaxAge:   60 * 60 * 10,
 	}
 }
 
