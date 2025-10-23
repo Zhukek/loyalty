@@ -17,5 +17,7 @@ type Repository interface {
 	GetProcessingOrders(ctx context.Context) ([]models.Order, error)
 	UpdateOrder(number string, status models.OrderStatus, accrual *float64, ctx context.Context) error
 	UpdateOrderAndBalance(user_id int, number string, status models.OrderStatus, accrual *float64, ctx context.Context) error
+	GetWithdraws(userID int, ctx context.Context) ([]models.Withdraw, error)
+	GetUserBalance(userID int, ctx context.Context) (*models.Balance, error)
 	MakeWithdraw(user_id int, withdraw float64, orderNum string, ctx context.Context) error
 }

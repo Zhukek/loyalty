@@ -267,6 +267,75 @@ func makeWithdraw(w http.ResponseWriter, req *http.Request, logger logger.Logger
 	w.WriteHeader(http.StatusOK)
 }
 
+func getBalance(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "application/json")
+
+	user, ok := utils.GetUserFromReq(w, req)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	balance, err := rep.GetUserBalance(user.Id, context.Background())
+	if err != nil {
+		logger.LogErr("get balance", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	data, err := json.Marshal(balance)
+	if err != nil {
+		logger.LogErr("json marshal", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		logger.LogErr("write body", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
+func getWithdrawals(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "application/json")
+
+	user, ok := utils.GetUserFromReq(w, req)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	withdraws, err := rep.GetWithdraws(user.Id, context.Background())
+	if err != nil {
+		logger.LogErr("get withdraws", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	if len(withdraws) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	data, err := json.Marshal(withdraws)
+	if err != nil {
+		logger.LogErr("marshal withdraws", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		logger.LogErr("write data", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {
 	router := chi.NewRouter()
 
@@ -293,11 +362,11 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 				getOrders(w, r, logger, repository)
 			})
 			r.Get("/withdrawals", func(w http.ResponseWriter, r *http.Request) {
-
+				getWithdrawals(w, r, logger, repository)
 			})
 			r.Route("/balance", func(r chi.Router) {
 				r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-
+					getBalance(w, r, logger, repository)
 				})
 				r.Post("/withdraw", func(w http.ResponseWriter, r *http.Request) {
 					makeWithdraw(w, r, logger, repository)

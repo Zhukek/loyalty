@@ -59,7 +59,7 @@ func (rep *PgRepository) UpdateOrder(number string, status models.OrderStatus, a
 	return updateOrder(number, status, accrual, rep.pool, ctx)
 }
 
-func (rep *PgRepository) UpdateOrderAndBalance(user_id int, number string, status models.OrderStatus, accrual *float64, ctx context.Context) error {
+func (rep *PgRepository) UpdateOrderAndBalance(userID int, number string, status models.OrderStatus, accrual *float64, ctx context.Context) error {
 	txOptions := pgx.TxOptions{
 		IsoLevel: pgx.Serializable,
 	}
@@ -75,7 +75,7 @@ func (rep *PgRepository) UpdateOrderAndBalance(user_id int, number string, statu
 		return err
 	}
 
-	err = updateUserBalance(user_id, *accrual, tx, ctx)
+	err = updateUserBalance(userID, *accrual, tx, ctx)
 	if err != nil {
 		tx.Rollback(ctx)
 		return err
@@ -85,7 +85,28 @@ func (rep *PgRepository) UpdateOrderAndBalance(user_id int, number string, statu
 	return nil
 }
 
-func (rep *PgRepository) MakeWithdraw(user_id int, withdraw float64, orderNum string, ctx context.Context) error {
+func (rep *PgRepository) GetUserBalance(userID int, ctx context.Context) (*models.Balance, error) {
+	sum, err := getWithdrawsSum(userID, rep.pool, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := getUserByID(userID, rep.pool, ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Balance{
+		Current:   user.Balance,
+		Withdrawn: sum,
+	}, nil
+}
+
+func (rep *PgRepository) GetWithdraws(userID int, ctx context.Context) ([]models.Withdraw, error) {
+	return getWithdraws(userID, rep.pool, ctx)
+}
+
+func (rep *PgRepository) MakeWithdraw(userID int, withdraw float64, orderNum string, ctx context.Context) error {
 	txOptions := pgx.TxOptions{
 		IsoLevel: pgx.Serializable,
 	}
@@ -95,13 +116,13 @@ func (rep *PgRepository) MakeWithdraw(user_id int, withdraw float64, orderNum st
 		return err
 	}
 
-	err = updateUserBalance(user_id, -withdraw, tx, ctx)
+	err = updateUserBalance(userID, -withdraw, tx, ctx)
 	if err != nil {
 		tx.Rollback(ctx)
 		return pgerr.ClassifyUserErr(err)
 	}
 
-	err = addWithdraw(user_id, withdraw, orderNum, tx, ctx)
+	err = addWithdraw(userID, withdraw, orderNum, tx, ctx)
 	if err != nil {
 		tx.Rollback(ctx)
 		return err
@@ -202,12 +223,22 @@ func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*m
 	return &user, err
 }
 
-func updateUserBalance(user_id int, changeBalance float64, DBCon DBConnection, ctx context.Context) error {
+func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User, error) {
+	user := models.User{}
+	err := DBCon.QueryRow(ctx,
+		`SELECT id, username, password_hash, balance FROM users WHERE id = @id`,
+		pgx.NamedArgs{"id": id},
+	).Scan(&user.Id, &user.Log, &user.Pass, &user.Balance)
+
+	return &user, err
+}
+
+func updateUserBalance(userID int, changeBalance float64, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
-		`UPDATE users SET balance = balance + @change_balance WHERE id = @user_id`,
+		`UPDATE users SET balance = balance + @change_balance WHERE id = @userID`,
 		pgx.NamedArgs{
 			"change_balance": changeBalance,
-			"user_id":        user_id,
+			"userID":         userID,
 		},
 	)
 
@@ -312,11 +343,11 @@ func getProcessingOrders(DBCon DBConnection, ctx context.Context) ([]models.Orde
 
 func createOrder(number string, userID int, status models.OrderStatus, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
-		`INSERT INTO orders (number, status, user_id) VALUES (@number, @status, @user_id)`,
+		`INSERT INTO orders (number, status, user_id) VALUES (@number, @status, @userID)`,
 		pgx.NamedArgs{
-			"number":  number,
-			"status":  status,
-			"user_id": userID,
+			"number": number,
+			"status": status,
+			"userID": userID,
 		},
 	)
 
@@ -339,15 +370,66 @@ func updateOrder(number string, status models.OrderStatus, accrual *float64, DBC
 	return err
 }
 
-func addWithdraw(user_id int, withdraw float64, order_num string, DBCon DBConnection, ctx context.Context) error {
+func addWithdraw(userID int, withdraw float64, order_num string, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
-		`INSERT INTO withdraws (withdraw, order_num, user_id) VALUES (@withdraw, @order_num, @user_id)`,
+		`INSERT INTO withdraws (withdraw, order_num, user_id) VALUES (@withdraw, @order_num, @userID)`,
 		pgx.NamedArgs{
 			"withdraw":  withdraw,
 			"order_num": order_num,
-			"user_id":   user_id,
+			"userID":    userID,
 		},
 	)
 
 	return err
+}
+
+func getWithdraws(userID int, DBCon DBConnection, ctx context.Context) ([]models.Withdraw, error) {
+	var withdraws []models.Withdraw
+
+	rows, err := DBCon.Query(ctx,
+		`SELECT withdraw, order_num, processed_at FROM withdraws WHERE user_id = @userID`,
+		pgx.NamedArgs{"userID": userID},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		withdraw := models.Withdraw{}
+
+		err := rows.Scan(&withdraw.Sum, &withdraw.Order, &withdraw.Processed)
+		if err != nil {
+			return nil, err
+		}
+
+		withdraws = append(withdraws, withdraw)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return withdraws, nil
+}
+
+func getWithdrawsSum(userID int, DBCon DBConnection, ctx context.Context) (float64, error) {
+	var sum sql.NullFloat64
+
+	err := DBCon.QueryRow(ctx,
+		`SELECT SUM(withdraw) FROM withdraws WHERE user_id = @userID`,
+		pgx.NamedArgs{"userID": userID},
+	).Scan(&sum)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if sum.Valid {
+		return sum.Float64, nil
+	}
+
+	return 0, nil
 }
