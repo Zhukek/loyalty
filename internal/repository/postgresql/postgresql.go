@@ -42,7 +42,7 @@ func (rep *PgRepository) CreateUser(login string, hashedPass string, ctx context
 	}
 
 	return &models.UserPublic{
-		Id:  user.Id,
+		ID:  user.ID,
 		Log: user.Log,
 	}, nil
 }
@@ -218,7 +218,7 @@ func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*m
 	err := DBCon.QueryRow(ctx,
 		`SELECT id, username, password_hash, balance FROM users WHERE username = @username`,
 		pgx.NamedArgs{"username": username},
-	).Scan(&user.Id, &user.Log, &user.Pass, &user.Balance)
+	).Scan(&user.ID, &user.Log, &user.Pass, &user.Balance)
 
 	return &user, err
 }
@@ -228,7 +228,7 @@ func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User,
 	err := DBCon.QueryRow(ctx,
 		`SELECT id, username, password_hash, balance FROM users WHERE id = @id`,
 		pgx.NamedArgs{"id": id},
-	).Scan(&user.Id, &user.Log, &user.Pass, &user.Balance)
+	).Scan(&user.ID, &user.Log, &user.Pass, &user.Balance)
 
 	return &user, err
 }

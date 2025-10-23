@@ -9,7 +9,7 @@ type User struct {
 }
 
 type UserPublic struct {
-	Id  int    `json:"id"`
+	ID  int    `json:"id"`
 	Log string `json:"login"`
 }
 

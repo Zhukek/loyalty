@@ -161,7 +161,7 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 	order, err := rep.GetOrderByNum(num, context.Background())
 	if err != nil {
 		if errors.Is(err, errs.ErrNoOrderFound) {
-			if err := rep.CreateOrder(num, user.Id, models.OrderNew, context.Background()); err != nil {
+			if err := rep.CreateOrder(num, user.ID, models.OrderNew, context.Background()); err != nil {
 				logger.LogErr("create order", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -175,7 +175,7 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 		}
 	}
 
-	if order.UserID == user.Id {
+	if order.UserID == user.ID {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -193,7 +193,7 @@ func getOrders(w http.ResponseWriter, req *http.Request, logger logger.Logger, r
 		return
 	}
 
-	orders, err := rep.GetUserOrders(user.Id, context.Background())
+	orders, err := rep.GetUserOrders(user.ID, context.Background())
 	if err != nil {
 		logger.LogErr("get orders", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -252,7 +252,7 @@ func makeWithdraw(w http.ResponseWriter, req *http.Request, logger logger.Logger
 		return
 	}
 
-	err = rep.MakeWithdraw(user.Id, withdraw.Sum, withdraw.Order, context.Background())
+	err = rep.MakeWithdraw(user.ID, withdraw.Sum, withdraw.Order, context.Background())
 	if err != nil {
 		if errors.Is(err, errs.ErrLowBalance) {
 			w.WriteHeader(http.StatusPaymentRequired)
@@ -277,7 +277,7 @@ func getBalance(w http.ResponseWriter, req *http.Request, logger logger.Logger, 
 		return
 	}
 
-	balance, err := rep.GetUserBalance(user.Id, context.Background())
+	balance, err := rep.GetUserBalance(user.ID, context.Background())
 	if err != nil {
 		logger.LogErr("get balance", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -309,7 +309,7 @@ func getWithdrawals(w http.ResponseWriter, req *http.Request, logger logger.Logg
 		return
 	}
 
-	withdraws, err := rep.GetWithdraws(user.Id, context.Background())
+	withdraws, err := rep.GetWithdraws(user.ID, context.Background())
 	if err != nil {
 		logger.LogErr("get withdraws", err)
 		w.WriteHeader(http.StatusInternalServerError)

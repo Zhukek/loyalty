@@ -42,7 +42,7 @@ const (
 
 func GenerateJWT(user *models.UserPublic) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims{
-		UserID:   user.Id,
+		UserID:   user.ID,
 		Username: user.Log,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExp)),
@@ -70,7 +70,7 @@ func GetTokenData(tokenStr string) (*models.UserPublic, error) {
 	}
 
 	user := models.UserPublic{
-		Id:  claims.UserID,
+		ID:  claims.UserID,
 		Log: claims.Username,
 	}
 
@@ -84,8 +84,8 @@ func GenerateJWTCookie(jwtString string) *http.Cookie {
 		Name:     "jwt",
 		Value:    jwtString,
 		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
+		HttpOnly: false,
+		Secure:   false,
 		MaxAge:   60 * 60 * 10,
 	}
 }
