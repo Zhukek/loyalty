@@ -153,6 +153,11 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 
 	num := string(body)
 
+	if ok := utils.CheckLuhn(num); !ok {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
 	order, err := rep.GetOrderByNum(num, context.Background())
 	if err != nil {
 		if errors.Is(err, errs.ErrNoOrderFound) {
@@ -215,6 +220,53 @@ func getOrders(w http.ResponseWriter, req *http.Request, logger logger.Logger, r
 	}
 }
 
+func makeWithdraw(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep repository.Repository) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+
+	user, ok := utils.GetUserFromReq(w, req)
+
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	var withdraw models.Withdraw
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		logger.LogInfo("read body", err)
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if err := json.Unmarshal(body, &withdraw); err != nil {
+		logger.LogInfo("json unmarshal", err)
+
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if ok := utils.CheckLuhn(withdraw.Order); !ok {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
+
+	err = rep.MakeWithdraw(user.Id, withdraw.Sum, withdraw.Order, context.Background())
+	if err != nil {
+		if errors.Is(err, errs.ErrLowBalance) {
+			w.WriteHeader(http.StatusPaymentRequired)
+			return
+		}
+		logger.LogErr("make withdraw", err)
+
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux {
 	router := chi.NewRouter()
 
@@ -248,7 +300,7 @@ func NewRouter(logger logger.Logger, repository repository.Repository) *chi.Mux 
 
 				})
 				r.Post("/withdraw", func(w http.ResponseWriter, r *http.Request) {
-
+					makeWithdraw(w, r, logger, repository)
 				})
 			})
 		})

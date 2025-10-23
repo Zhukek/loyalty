@@ -2,6 +2,7 @@ package utils
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Zhukek/loyalty/internal/errs"
@@ -101,4 +102,34 @@ func GetUserFromReq(w http.ResponseWriter, req *http.Request) (*models.UserPubli
 
 	user, ok := userValue.(*models.UserPublic)
 	return user, ok
+}
+
+/// Проверить алгоритмом Луна
+
+func CheckLuhn(order string) bool {
+	if len(order) < 2 {
+		return false
+	}
+
+	sum := 0
+	isSecond := false
+
+	for i := len(order) - 1; i >= 0; i-- {
+		digit, err := strconv.Atoi(string(order[i]))
+		if err != nil {
+			return false
+		}
+
+		if isSecond {
+			digit *= 2
+			if digit > 9 {
+				digit -= 9
+			}
+		}
+
+		sum += digit
+		isSecond = !isSecond
+	}
+
+	return sum%10 == 0
 }

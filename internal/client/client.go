@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -49,11 +48,21 @@ func (c *Client) worker() {
 
 		switch resp.StatusCode() {
 		case http.StatusOK:
-			fmt.Println(resOrder.Order)
-			/// update
+			var status models.OrderStatus
+
+			if status == models.OrderRegistered {
+				status = models.OrderNew
+			} else {
+				status = resOrder.Status
+			}
+
+			if resOrder.Accrual != 0 {
+				c.rep.UpdateOrderAndBalance(order.UserID, order.Number, status, &resOrder.Accrual, context.Background())
+			} else {
+				c.rep.UpdateOrder(order.Number, status, nil, context.Background())
+			}
 		case http.StatusNoContent:
-			/// invalid
-			continue
+			c.rep.UpdateOrder(order.Number, models.OrderInvalid, nil, context.Background())
 		case http.StatusTooManyRequests:
 			time.Sleep(1 * time.Minute)
 

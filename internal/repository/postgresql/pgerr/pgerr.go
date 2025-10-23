@@ -15,6 +15,8 @@ func ClassifyUserErr(err error) error {
 		switch pgErr.Code {
 		case pgerrcode.UniqueViolation:
 			return errs.ErrUsernameTaken
+		case pgerrcode.CheckViolation:
+			return errs.ErrLowBalance
 		}
 	}
 	return err

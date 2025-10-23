@@ -55,6 +55,62 @@ func (rep *PgRepository) CreateOrder(number string, userID int, status models.Or
 	return createOrder(number, userID, status, rep.pool, ctx)
 }
 
+func (rep *PgRepository) UpdateOrder(number string, status models.OrderStatus, accrual *float64, ctx context.Context) error {
+	return updateOrder(number, status, accrual, rep.pool, ctx)
+}
+
+func (rep *PgRepository) UpdateOrderAndBalance(user_id int, number string, status models.OrderStatus, accrual *float64, ctx context.Context) error {
+	txOptions := pgx.TxOptions{
+		IsoLevel: pgx.Serializable,
+	}
+
+	tx, err := rep.pool.BeginTx(ctx, txOptions)
+	if err != nil {
+		return err
+	}
+
+	err = updateOrder(number, status, accrual, tx, ctx)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	err = updateUserBalance(user_id, *accrual, tx, ctx)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	tx.Commit(ctx)
+	return nil
+}
+
+func (rep *PgRepository) MakeWithdraw(user_id int, withdraw float64, orderNum string, ctx context.Context) error {
+	txOptions := pgx.TxOptions{
+		IsoLevel: pgx.Serializable,
+	}
+
+	tx, err := rep.pool.BeginTx(ctx, txOptions)
+	if err != nil {
+		return err
+	}
+
+	err = updateUserBalance(user_id, -withdraw, tx, ctx)
+	if err != nil {
+		tx.Rollback(ctx)
+		return pgerr.ClassifyUserErr(err)
+	}
+
+	err = addWithdraw(user_id, withdraw, orderNum, tx, ctx)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	tx.Commit(ctx)
+	return nil
+}
+
 func (rep *PgRepository) GetOrderByNum(number string, ctx context.Context) (*models.Order, error) {
 	order, err := getOrderByNumber(number, rep.pool, ctx)
 
@@ -139,22 +195,24 @@ func migration(DBURI string) error {
 func getUserByName(username string, DBCon DBConnection, ctx context.Context) (*models.User, error) {
 	user := models.User{}
 	err := DBCon.QueryRow(ctx,
-		`SELECT id, username, password_hash FROM users WHERE username = @username`,
+		`SELECT id, username, password_hash, balance FROM users WHERE username = @username`,
 		pgx.NamedArgs{"username": username},
-	).Scan(&user.Id, &user.Log, &user.Pass)
+	).Scan(&user.Id, &user.Log, &user.Pass, &user.Balance)
 
 	return &user, err
 }
 
-/* func getUserByID(id int, DBCon DBConnection, ctx context.Context) (*models.User, error) {
-	user := models.User{}
-	err := DBCon.QueryRow(ctx,
-		`SELECT id, username, password_hash FROM users WHERE id = @id`,
-		pgx.NamedArgs{"id": id},
-	).Scan(&user.Id, &user.Log, &user.Pass)
+func updateUserBalance(user_id int, changeBalance float64, DBCon DBConnection, ctx context.Context) error {
+	_, err := DBCon.Exec(ctx,
+		`UPDATE users SET balance = balance + @change_balance WHERE id = @user_id`,
+		pgx.NamedArgs{
+			"change_balance": changeBalance,
+			"user_id":        user_id,
+		},
+	)
 
-	return &user, err
-} */
+	return err
+}
 
 func createUser(login string, hashed_pass string, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
@@ -170,7 +228,7 @@ func createUser(login string, hashed_pass string, DBCon DBConnection, ctx contex
 
 func getOrderByNumber(number string, DBCon DBConnection, ctx context.Context) (*models.Order, error) {
 	order := models.Order{}
-	var accrual sql.NullInt32
+	var accrual sql.NullFloat64
 
 	err := DBCon.QueryRow(ctx,
 		`SELECT number, status, accrual, uploaded_at, user_id FROM orders WHERE number = @number`,
@@ -178,7 +236,7 @@ func getOrderByNumber(number string, DBCon DBConnection, ctx context.Context) (*
 	).Scan(&order.Number, &order.Status, &accrual, &order.Uploaded, &order.UserID)
 
 	if accrual.Valid {
-		order.Accrual = int(accrual.Int32)
+		order.Accrual = accrual.Float64
 	}
 
 	return &order, err
@@ -199,7 +257,7 @@ func getUserOrders(userID int, DBCon DBConnection, ctx context.Context) ([]model
 
 	for rows.Next() {
 		order := models.Order{}
-		var accrual sql.NullInt32
+		var accrual sql.NullFloat64
 
 		err = rows.Scan(&order.Number, &order.Status, &accrual, &order.Uploaded)
 		if err != nil {
@@ -207,7 +265,7 @@ func getUserOrders(userID int, DBCon DBConnection, ctx context.Context) ([]model
 		}
 
 		if accrual.Valid {
-			order.Accrual = int(accrual.Int32)
+			order.Accrual = accrual.Float64
 		}
 
 		orders = append(orders, order)
@@ -225,7 +283,7 @@ func getProcessingOrders(DBCon DBConnection, ctx context.Context) ([]models.Orde
 	var orders []models.Order
 
 	rows, err := DBCon.Query(ctx,
-		`SELECT number, status FROM orders WHERE status = 'NEW' OR status = 'PROCESSING'`,
+		`SELECT number, status, user_id FROM orders WHERE status = 'NEW' OR status = 'PROCESSING'`,
 	)
 
 	if err != nil {
@@ -236,7 +294,7 @@ func getProcessingOrders(DBCon DBConnection, ctx context.Context) ([]models.Orde
 
 	for rows.Next() {
 		order := models.Order{}
-		err = rows.Scan(&order.Number, &order.Status)
+		err = rows.Scan(&order.Number, &order.Status, &order.UserID)
 		if err != nil {
 			return nil, err
 		}
@@ -259,6 +317,35 @@ func createOrder(number string, userID int, status models.OrderStatus, DBCon DBC
 			"number":  number,
 			"status":  status,
 			"user_id": userID,
+		},
+	)
+
+	return err
+}
+
+func updateOrder(number string, status models.OrderStatus, accrual *float64, DBCon DBConnection, ctx context.Context) error {
+	query := `UPDATE orders SET status = @status`
+	args := pgx.NamedArgs{
+		"status": status,
+		"number": number,
+	}
+	if accrual != nil {
+		query += `, accrual = @accrual`
+		args["accrual"] = *accrual
+	}
+	query += ` WHERE number = @number`
+	_, err := DBCon.Exec(ctx, query, args)
+
+	return err
+}
+
+func addWithdraw(user_id int, withdraw float64, order_num string, DBCon DBConnection, ctx context.Context) error {
+	_, err := DBCon.Exec(ctx,
+		`INSERT INTO withdraws (withdraw, order_num, user_id) VALUES (@withdraw, @order_num, @user_id)`,
+		pgx.NamedArgs{
+			"withdraw":  withdraw,
+			"order_num": order_num,
+			"user_id":   user_id,
 		},
 	)
 
