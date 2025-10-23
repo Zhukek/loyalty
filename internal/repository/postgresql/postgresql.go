@@ -28,8 +28,8 @@ type PgRepository struct {
 	pool *pgxpool.Pool
 }
 
-func (rep *PgRepository) CreateUser(login string, hashed_pass string, ctx context.Context) (*models.UserPublic, error) {
-	err := createUser(login, hashed_pass, rep.pool, ctx)
+func (rep *PgRepository) CreateUser(login string, hashedPass string, ctx context.Context) (*models.UserPublic, error) {
+	err := createUser(login, hashedPass, rep.pool, ctx)
 
 	if err != nil {
 		return nil, pgerr.ClassifyUserErr(err)
@@ -157,8 +157,8 @@ func (rep *PgRepository) Close() {
 	rep.pool.Close()
 }
 
-func (r *PgRepository) Ping(ctx context.Context) error {
-	return r.pool.Ping(ctx)
+func (rep *PgRepository) Ping(ctx context.Context) error {
+	return rep.pool.Ping(ctx)
 }
 
 func NewPGRepository(DBURI string) (*PgRepository, error) {
@@ -245,12 +245,12 @@ func updateUserBalance(userID int, changeBalance float64, DBCon DBConnection, ct
 	return err
 }
 
-func createUser(login string, hashed_pass string, DBCon DBConnection, ctx context.Context) error {
+func createUser(login string, hashedPass string, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
 		`INSERT INTO users (username, password_hash) VALUES (@login, @hashed_pass)`,
 		pgx.NamedArgs{
 			"login":       login,
-			"hashed_pass": hashed_pass,
+			"hashed_pass": hashedPass,
 		},
 	)
 
@@ -370,12 +370,12 @@ func updateOrder(number string, status models.OrderStatus, accrual *float64, DBC
 	return err
 }
 
-func addWithdraw(userID int, withdraw float64, order_num string, DBCon DBConnection, ctx context.Context) error {
+func addWithdraw(userID int, withdraw float64, orderNum string, DBCon DBConnection, ctx context.Context) error {
 	_, err := DBCon.Exec(ctx,
 		`INSERT INTO withdraws (withdraw, order_num, user_id) VALUES (@withdraw, @order_num, @userID)`,
 		pgx.NamedArgs{
 			"withdraw":  withdraw,
-			"order_num": order_num,
+			"order_num": orderNum,
 			"userID":    userID,
 		},
 	)

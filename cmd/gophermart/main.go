@@ -31,9 +31,9 @@ func run(logger logger.Logger) error {
 	config := getParams()
 
 	var (
-		address string = config.Address
-		DBURI          = config.DBURI
-		accrual        = config.AccrualAddress
+		address = config.Address
+		DBURI   = config.DBURI
+		accrual = config.AccrualAddress
 	)
 
 	if DBURI == "" {

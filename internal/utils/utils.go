@@ -36,8 +36,8 @@ type claims struct {
 }
 
 const (
-	TOKEN_EXP  = time.Hour
-	SECRET_STR = "asdfygausdf"
+	tokenExp  = time.Hour
+	SecretStr = "asdfygausdf"
 )
 
 func GenerateJWT(user *models.UserPublic) (string, error) {
@@ -45,11 +45,11 @@ func GenerateJWT(user *models.UserPublic) (string, error) {
 		UserID:   user.Id,
 		Username: user.Log,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(TOKEN_EXP)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExp)),
 		},
 	})
 
-	return token.SignedString([]byte(SECRET_STR))
+	return token.SignedString([]byte(SecretStr))
 }
 
 func GetTokenData(tokenStr string) (*models.UserPublic, error) {
@@ -58,7 +58,7 @@ func GetTokenData(tokenStr string) (*models.UserPublic, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errs.ErrSigningMethod
 		}
-		return []byte(SECRET_STR), nil
+		return []byte(SecretStr), nil
 	})
 
 	if err != nil {
