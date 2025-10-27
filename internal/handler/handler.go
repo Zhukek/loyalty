@@ -38,7 +38,7 @@ func register(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		logger.LogInfo("read body", err)
+		logger.LogErr("read body", err)
 
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -59,7 +59,7 @@ func register(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	createdUser, err := rep.CreateUser(user.Log, user.Pass, context.Background())
+	createdUser, err := rep.CreateUser(context.Background(), user.Log, user.Pass)
 
 	if errors.Is(err, errs.ErrUsernameTaken) {
 		w.WriteHeader(http.StatusConflict)
@@ -107,7 +107,7 @@ func auth(w http.ResponseWriter, req *http.Request, logger logger.Logger, rep re
 		return
 	}
 
-	foundUser, err := rep.GetUserByName(user.Log, context.Background())
+	foundUser, err := rep.GetUserByName(context.Background(), user.Log)
 	if err != nil {
 		logger.LogInfo("get user", err)
 		w.WriteHeader(http.StatusUnauthorized)
@@ -140,7 +140,7 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 	user, ok := utils.GetUserFromReq(w, req)
 
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -158,10 +158,10 @@ func newOrder(w http.ResponseWriter, req *http.Request, logger logger.Logger, re
 		return
 	}
 
-	order, err := rep.GetOrderByNum(num, context.Background())
+	order, err := rep.GetOrderByNum(context.Background(), num)
 	if err != nil {
 		if errors.Is(err, errs.ErrNoOrderFound) {
-			if err := rep.CreateOrder(num, user.ID, models.OrderNew, context.Background()); err != nil {
+			if err := rep.CreateOrder(context.Background(), num, user.ID, models.OrderNew); err != nil {
 				logger.LogErr("create order", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -189,11 +189,11 @@ func getOrders(w http.ResponseWriter, req *http.Request, logger logger.Logger, r
 	user, ok := utils.GetUserFromReq(w, req)
 
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	orders, err := rep.GetUserOrders(user.ID, context.Background())
+	orders, err := rep.GetUserOrders(context.Background(), user.ID)
 	if err != nil {
 		logger.LogErr("get orders", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -226,7 +226,7 @@ func makeWithdraw(w http.ResponseWriter, req *http.Request, logger logger.Logger
 	user, ok := utils.GetUserFromReq(w, req)
 
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
@@ -252,7 +252,7 @@ func makeWithdraw(w http.ResponseWriter, req *http.Request, logger logger.Logger
 		return
 	}
 
-	err = rep.MakeWithdraw(user.ID, withdraw.Sum, withdraw.Order, context.Background())
+	err = rep.MakeWithdraw(context.Background(), user.ID, withdraw.Sum, withdraw.Order)
 	if err != nil {
 		if errors.Is(err, errs.ErrLowBalance) {
 			w.WriteHeader(http.StatusPaymentRequired)
@@ -273,11 +273,11 @@ func getBalance(w http.ResponseWriter, req *http.Request, logger logger.Logger, 
 	user, ok := utils.GetUserFromReq(w, req)
 
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	balance, err := rep.GetUserBalance(user.ID, context.Background())
+	balance, err := rep.GetUserBalance(context.Background(), user.ID)
 	if err != nil {
 		logger.LogErr("get balance", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -305,11 +305,11 @@ func getWithdrawals(w http.ResponseWriter, req *http.Request, logger logger.Logg
 	user, ok := utils.GetUserFromReq(w, req)
 
 	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
-	withdraws, err := rep.GetWithdraws(user.ID, context.Background())
+	withdraws, err := rep.GetWithdraws(context.Background(), user.ID)
 	if err != nil {
 		logger.LogErr("get withdraws", err)
 		w.WriteHeader(http.StatusInternalServerError)

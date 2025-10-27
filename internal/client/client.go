@@ -12,7 +12,7 @@ import (
 )
 
 type Client struct {
-	c       *resty.Client
+	client  *resty.Client
 	rep     repository.Repository
 	accrual string
 	logger  logger.Logger
@@ -35,7 +35,7 @@ func (c *Client) worker() {
 	for order := range c.jobs {
 		var resOrder models.AccrualOrder
 
-		resp, err := c.c.R().
+		resp, err := c.client.R().
 			SetPathParam("orderID", order.Number).
 			SetHeader("Accept", "application/json").
 			SetResult(&resOrder).
@@ -57,12 +57,12 @@ func (c *Client) worker() {
 			}
 
 			if resOrder.Accrual != 0 {
-				c.rep.UpdateOrderAndBalance(order.UserID, order.Number, status, &resOrder.Accrual, context.Background())
+				c.rep.UpdateOrderAndBalance(context.Background(), order.UserID, order.Number, status, &resOrder.Accrual)
 			} else {
-				c.rep.UpdateOrder(order.Number, status, nil, context.Background())
+				c.rep.UpdateOrder(context.Background(), order.Number, status, nil)
 			}
 		case http.StatusNoContent:
-			c.rep.UpdateOrder(order.Number, models.OrderInvalid, nil, context.Background())
+			c.rep.UpdateOrder(context.Background(), order.Number, models.OrderInvalid, nil)
 		case http.StatusTooManyRequests:
 			time.Sleep(1 * time.Minute)
 
@@ -87,7 +87,7 @@ func (c *Client) start() {
 }
 
 func (c *Client) Close() {
-	c.c.Close()
+	c.client.Close()
 	close(c.jobs)
 }
 
@@ -97,7 +97,7 @@ func NewtClient(accrualAddress string, rep repository.Repository, logger logger.
 	jobsChan := make(chan models.Order, numJobs)
 
 	client := Client{
-		c:       restyClient,
+		client:  restyClient,
 		rep:     rep,
 		accrual: accrualAddress,
 		logger:  logger,
