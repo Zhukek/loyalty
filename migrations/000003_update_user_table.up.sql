@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN balance NUMERIC DEFAULT 0 CHECK (balance >= 0)
